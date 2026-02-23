@@ -1,0 +1,154 @@
+-- Modern & Stable Player-Only Body Fling GUI
+local LPlayer = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local FlingActive = false
+local FlingPower = 150
+local Connections = {}
+
+-- Clean existing GUI if it exists
+if game.CoreGui:FindFirstChild("StableFlingGui") then
+    game.CoreGui.StableFlingGui:Destroy()
+end
+
+-- Create GUI Elements
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
+local Title = Instance.new("TextLabel")
+local ToggleBtn = Instance.new("TextButton")
+local BTNCorner = Instance.new("UICorner")
+
+ScreenGui.Name = "StableFlingGui"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ResetOnSpawn = false
+
+-- Main Frame Styling
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.5, -75, 0.4, -50)
+MainFrame.Size = UDim2.new(0, 150, 0, 90)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- Modern Dragging Script (Para dili guba ang UI)
+local UserInputService = game:GetService("UserInputService")
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+
+MainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then update(input) end
+end)
+
+-- Title Styling
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.BackgroundTransparency = 0
+Title.Text = "STEALTH FLING v2"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 12
+Title.Font = Enum.Font.GothamBold
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- Toggle Button Styling
+ToggleBtn.Parent = MainFrame
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.45, 5)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0, 35)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50) -- Red
+ToggleBtn.Text = "OFF"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 16
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.BorderSizePixel = 0
+
+BTNCorner.CornerRadius = UDim.new(0, 6)
+BTNCorner.Parent = ToggleBtn
+
+-- Stability Logic (Para dili ka malagpot)
+local function Stabilize(Char)
+    local Hum = Char:FindFirstChildOfClass("Humanoid")
+    if Hum then
+        Hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        Hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    end
+    for _, part in pairs(Char:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CustomPhysicalProperties = PhysicalProperties.new(100, 0.3, 0.5)
+        end
+    end
+end
+
+-- Fling Logic (Player Only)
+local function ApplyFling()
+    local Char = LPlayer.Character
+    if not Char then return end
+    Stabilize(Char)
+
+    for _, part in pairs(Char:GetChildren()) do
+        if part:IsA("BasePart") then
+            local touching = false
+            local t1 = part.Touched:Connect(function(hit)
+                if hit.Parent:FindFirstChild("Humanoid") and hit.Parent.Name ~= LPlayer.Name then
+                    touching = true
+                end
+            end)
+            local t2 = part.TouchEnded:Connect(function() touching = false end)
+            local v1 = RunService.Heartbeat:Connect(function()
+                if FlingActive and touching then
+                    local vel = part.Velocity
+                    part.Velocity = vel * FlingPower + Vector3.new(0, FlingPower, 0)
+                    RunService.RenderStepped:Wait()
+                    part.Velocity = vel
+                end
+            end)
+            table.insert(Connections, t1)
+            table.insert(Connections, t2)
+            table.insert(Connections, v1)
+        end
+    end
+end
+
+-- Button Event
+ToggleBtn.MouseButton1Click:Connect(function()
+    FlingActive = not FlingActive
+    if FlingActive then
+        ToggleBtn.Text = "ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50) -- Green
+        ApplyFling()
+    else
+        ToggleBtn.Text = "OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50) -- Red
+        for _, c in pairs(Connections) do c:Disconnect() end
+        Connections = {}
+    end
+end)
+
+print("GUI Fixed & Modernized. Ready na, boss!")

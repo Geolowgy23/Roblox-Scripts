@@ -1,0 +1,4 @@
+loadstring(game:HttpGet"https://raw.githubusercontent.com/LawrenceLud/Templo/refs/heads/main/TemploLoader.lua")()
+
+
+https://ads.luarmor.net/get_key?for=Kali_Hub__Rinku-DvLSdzcBmVYt

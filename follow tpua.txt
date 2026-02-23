@@ -1,0 +1,220 @@
+--[[ 
+    TPUA FLING PRO V4 (Added: Part Capacity/Limit)
+    Description: Set a limit on how many unanchored parts to control at once.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- GUI SETUP
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TPUA_Fling_Pro_V4"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui") or LocalPlayer:FindFirstChildOfClass("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 520) -- Gidakoan gamay para sa capacity settings
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -260)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+-- TITLE
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Title.Text = "   🔥 TPUA FLING V4 (LIMITER)"
+Title.TextColor3 = Color3.fromRGB(255, 80, 0)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseBtn.Text = "X"
+CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = MainFrame
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 5)
+
+-- CAPACITY SETTING (BAG-O)
+local CapacityLabel = Instance.new("TextLabel")
+CapacityLabel.Size = UDim2.new(0, 150, 0, 30)
+CapacityLabel.Position = UDim2.new(0, 10, 0, 50)
+CapacityLabel.BackgroundTransparency = 1
+CapacityLabel.Text = "Part Capacity Limit:"
+CapacityLabel.TextColor3 = Color3.new(1, 1, 1)
+CapacityLabel.Font = Enum.Font.GothamSemibold
+CapacityLabel.TextSize = 13
+CapacityLabel.TextXAlignment = Enum.TextXAlignment.Left
+CapacityLabel.Parent = MainFrame
+
+local CapacityInput = Instance.new("TextBox")
+CapacityInput.Size = UDim2.new(0, 60, 0, 25)
+CapacityInput.Position = UDim2.new(0, 140, 0, 52)
+CapacityInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+CapacityInput.Text = "50" -- Default capacity
+CapacityInput.TextColor3 = Color3.fromRGB(0, 255, 150)
+CapacityInput.Font = Enum.Font.GothamBold
+CapacityInput.TextSize = 14
+CapacityInput.Parent = MainFrame
+Instance.new("UICorner", CapacityInput).CornerRadius = UDim.new(0, 5)
+
+-- SEARCH & REFRESH
+local SearchBar = Instance.new("TextBox")
+SearchBar.Size = UDim2.new(1, -70, 0, 30)
+SearchBar.Position = UDim2.new(0, 10, 0, 90)
+SearchBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+SearchBar.PlaceholderText = "Search Player..."
+SearchBar.Text = ""
+SearchBar.TextColor3 = Color3.new(1, 1, 1)
+SearchBar.Font = Enum.Font.Gotham
+SearchBar.TextSize = 14
+SearchBar.Parent = MainFrame
+Instance.new("UICorner", SearchBar).CornerRadius = UDim.new(0, 5)
+
+local RefreshBtn = Instance.new("TextButton")
+RefreshBtn.Size = UDim2.new(0, 50, 0, 30)
+RefreshBtn.Position = UDim2.new(1, -55, 0, 90)
+RefreshBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 100)
+RefreshBtn.Text = "↻"
+RefreshBtn.TextColor3 = Color3.new(1, 1, 1)
+RefreshBtn.Font = Enum.Font.GothamBold
+RefreshBtn.Parent = MainFrame
+Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 5)
+
+-- SCROLLING LIST
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -210)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 130)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.Parent = ScrollingFrame
+
+local OffBtn = Instance.new("TextButton")
+OffBtn.Size = UDim2.new(1, -20, 0, 35)
+OffBtn.Position = UDim2.new(0, 10, 1, -45)
+OffBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+OffBtn.Text = "STOP ALL FLING"
+OffBtn.TextColor3 = Color3.new(1, 1, 1)
+OffBtn.Font = Enum.Font.GothamSemibold
+OffBtn.Parent = MainFrame
+Instance.new("UICorner", OffBtn).CornerRadius = UDim.new(0, 5)
+
+-- LOGIC VARIABLES
+local activeTP = false
+local partLimit = 50
+
+-- FUNCTION TO GET UNANCHORED PARTS (WITH CAPACITY)
+local function getTargetParts()
+    local parts = {}
+    local count = 0
+    local limit = tonumber(CapacityInput.Text) or 50
+    
+    for _, part in pairs(workspace:GetDescendants()) do
+        if count >= limit then break end
+        if part:IsA("BasePart") and part.Anchored == false and not part:IsDescendantOf(LocalPlayer.Character) then
+            local isOtherPlayer = false
+            for _, p in pairs(Players:GetPlayers()) do
+                if part:IsDescendantOf(p.Character or {}) then isOtherPlayer = true end
+            end
+
+            if not isOtherPlayer then
+                table.insert(parts, part)
+                count = count + 1
+            end
+        end
+    end
+    return parts
+end
+
+local function stopTP()
+    activeTP = false
+    Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+end
+
+local function tpUnanchored(targetPlr)
+    activeTP = true
+    local selectedParts = getTargetParts()
+    
+    for _, part in pairs(selectedParts) do
+        -- Clear old forces
+        for _, c in pairs(part:GetChildren()) do
+            if c:IsA("BodyPosition") or c:IsA("BodyAngularVelocity") or c:IsA("BodyVelocity") then c:Destroy() end
+        end
+
+        local bp = Instance.new("BodyPosition")
+        bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bp.P = 50000; bp.D = 500; bp.Parent = part
+        
+        local bav = Instance.new("BodyAngularVelocity")
+        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bav.AngularVelocity = Vector3.new(150, 150, 150); bav.Parent = part
+        
+        task.spawn(function()
+            while activeTP and bp.Parent and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart") do
+                bp.Position = targetPlr.Character.HumanoidRootPart.Position
+                task.wait()
+            end
+            if bp.Parent then bp:Destroy() end
+            if bav.Parent then bav:Destroy() end
+        end)
+    end
+end
+
+-- UPDATE LIST
+local function updateList(filter)
+    for _, v in pairs(ScrollingFrame:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if filter and not string.find(plr.DisplayName:lower(), filter:lower()) and not string.find(plr.Name:lower(), filter:lower()) then continue end
+
+        local ItemFrame = Instance.new("Frame")
+        ItemFrame.Size = UDim2.new(1, -5, 0, 50); ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        ItemFrame.Parent = ScrollingFrame; Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 8)
+
+        local NameLabel = Instance.new("TextLabel")
+        NameLabel.Size = UDim2.new(1, -110, 1, 0); NameLabel.Position = UDim2.new(0, 10, 0, 0)
+        NameLabel.BackgroundTransparency = 1; NameLabel.Text = plr.DisplayName
+        NameLabel.TextColor3 = Color3.new(1, 1, 1); NameLabel.Font = Enum.Font.GothamSemibold; NameLabel.TextSize = 11
+        NameLabel.TextXAlignment = Enum.TextXAlignment.Left; NameLabel.Parent = ItemFrame
+
+        local TPBtn = Instance.new("TextButton")
+        TPBtn.Size = UDim2.new(0, 50, 0, 30); TPBtn.Position = UDim2.new(1, -100, 0, 10)
+        TPBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 0); TPBtn.Text = "FLING"
+        TPBtn.TextColor3 = Color3.new(1, 1, 1); TPBtn.Font = Enum.Font.GothamBold; TPBtn.TextSize = 10
+        TPBtn.Parent = ItemFrame; Instance.new("UICorner", TPBtn).CornerRadius = UDim.new(0, 5)
+
+        local ViewBtn = Instance.new("TextButton")
+        ViewBtn.Size = UDim2.new(0, 40, 0, 30); ViewBtn.Position = UDim2.new(1, -45, 0, 10)
+        ViewBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200); ViewBtn.Text = "View"
+        ViewBtn.TextColor3 = Color3.new(1, 1, 1); ViewBtn.Font = Enum.Font.GothamBold; ViewBtn.TextSize = 10
+        ViewBtn.Parent = ItemFrame; Instance.new("UICorner", ViewBtn).CornerRadius = UDim.new(0, 5)
+
+        TPBtn.MouseButton1Click:Connect(function() stopTP(); task.wait(0.1); tpUnanchored(plr) end)
+        ViewBtn.MouseButton1Click:Connect(function() if plr.Character and plr.Character:FindFirstChildOfClass("Humanoid") then Camera.CameraSubject = plr.Character:FindFirstChildOfClass("Humanoid") end end)
+    end
+end
+
+-- CONNECTIONS
+SearchBar:GetPropertyChangedSignal("Text"):Connect(function() updateList(SearchBar.Text) end)
+RefreshBtn.MouseButton1Click:Connect(function() updateList(SearchBar.Text) end)
+OffBtn.MouseButton1Click:Connect(stopTP)
+CloseBtn.MouseButton1Click:Connect(function() stopTP(); ScreenGui:Destroy() end)
+
+updateList()

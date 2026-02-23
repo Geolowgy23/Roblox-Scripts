@@ -1,0 +1,164 @@
+--// Legit ESP-style UI for your own game (NOT an exploit)
+--// Put this as a LocalScript in: StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LOCAL_PLAYER = Players.LocalPlayer
+
+-- SETTINGS
+local SHOW_SELF = false
+local MAX_DISTANCE = 500 -- studs
+local REFRESH_INTERVAL = 4 -- 🔁 refresh every 4 seconds
+
+------------------------------------------------------------
+
+local function getHumanoidAndRoot(character)
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	return humanoid, root
+end
+
+local function ensureHighlight(character)
+	local h = character:FindFirstChild("DevESP_Highlight")
+	if not h then
+		h = Instance.new("Highlight")
+		h.Name = "DevESP_Highlight"
+		h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		h.FillTransparency = 1
+		h.OutlineTransparency = 0
+		h.OutlineColor = Color3.fromRGB(0, 255, 170)
+		h.Parent = character
+	end
+	return h
+end
+
+local function ensureBillboard(character)
+	local head = character:FindFirstChild("Head")
+	if not head then return end
+
+	local gui = head:FindFirstChild("DevESP_HealthGui")
+	if gui then return gui end
+
+	gui = Instance.new("BillboardGui")
+	gui.Name = "DevESP_HealthGui"
+	gui.Size = UDim2.fromOffset(80, 10) -- small bar
+	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = MAX_DISTANCE or 100000
+	gui.Parent = head
+
+	local back = Instance.new("Frame")
+	back.Name = "Back"
+	back.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	back.BackgroundTransparency = 0.15
+	back.BorderSizePixel = 0
+	back.Size = UDim2.fromScale(1, 1)
+	back.Parent = gui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = back
+
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+	fill.BorderSizePixel = 0
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.Parent = back
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0, 5)
+	fillCorner.Parent = fill
+
+	return gui
+end
+
+local function updateHealthUI(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	local head = character:FindFirstChild("Head")
+	if not head then return end
+
+	local gui = ensureBillboard(character)
+	if not gui then return end
+
+	local back = gui:FindFirstChild("Back")
+	if not back then return end
+
+	local fill = back:FindFirstChild("Fill")
+	if not fill then return end
+
+	local ratio = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+	fill.Size = UDim2.fromScale(ratio, 1)
+
+	if ratio > 0.6 then
+		fill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+	elseif ratio > 0.3 then
+		fill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+	else
+		fill.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+	end
+end
+
+local function shouldShow(player)
+	if not SHOW_SELF and player == LOCAL_PLAYER then
+		return false
+	end
+	return true
+end
+
+local function attachToCharacter(player, character)
+	if not shouldShow(player) then return end
+
+	local humanoid, root = getHumanoidAndRoot(character)
+	if not humanoid or not root then return end
+
+	local hl = ensureHighlight(character)
+	ensureBillboard(character)
+
+	-- Team coloring (optional)
+	if player.Team and LOCAL_PLAYER.Team and player.Team == LOCAL_PLAYER.Team then
+		hl.OutlineColor = Color3.fromRGB(0, 170, 255)
+	else
+		hl.OutlineColor = Color3.fromRGB(0, 255, 170)
+	end
+
+	updateHealthUI(character)
+end
+
+local function refreshAll()
+	for _, player in ipairs(Players:GetPlayers()) do
+		if shouldShow(player) and player.Character then
+			attachToCharacter(player, player.Character)
+		end
+	end
+end
+
+-- Initial hook
+for _, p in ipairs(Players:GetPlayers()) do
+	p.CharacterAdded:Connect(function(char)
+		task.wait(1)
+		attachToCharacter(p, char)
+	end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function(char)
+		task.wait(1)
+		attachToCharacter(player, char)
+	end)
+end)
+
+------------------------------------------------------------
+-- 🔁 AUTO REFRESH LOOP (every 4 seconds)
+------------------------------------------------------------
+
+task.spawn(function()
+	while true do
+		refreshAll()
+		task.wait(REFRESH_INTERVAL)
+	end
+end)

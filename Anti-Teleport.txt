@@ -1,0 +1,132 @@
+local players = game:GetService('Players')
+local lplr = players.LocalPlayer
+local runService = game:GetService('RunService')
+local userInputService = game:GetService('UserInputService')
+local tweenService = game:GetService("TweenService")
+
+-- [[ IOS UI DESIGN ]]
+local screenGui = Instance.new("ScreenGui", lplr:WaitForChild("PlayerGui"))
+screenGui.Name = "iOS_Toggle_UI"
+screenGui.ResetOnSpawn = false
+
+-- Main Frame (The Glass Container)
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 140, 0, 50)
+mainFrame.Position = UDim2.new(0.5, -70, 0.2, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+mainFrame.BackgroundTransparency = 0.3
+mainFrame.BorderSizePixel = 0
+
+local uiCorner = Instance.new("UICorner", mainFrame)
+uiCorner.CornerRadius = UDim.new(0, 20) -- Rounded edges like iOS
+
+local uiStroke = Instance.new("UIStroke", mainFrame)
+uiStroke.Thickness = 1.5
+uiStroke.Color = Color3.fromRGB(255, 255, 255)
+uiStroke.Transparency = 0.5
+
+-- Label
+local label = Instance.new("TextLabel", mainFrame)
+label.Text = "STAY"
+label.Size = UDim2.new(0, 50, 1, 0)
+label.Position = UDim2.new(0, 15, 0, 0)
+label.BackgroundTransparency = 1
+label.Font = Enum.Font.GothamMedium
+label.TextColor3 = Color3.fromRGB(40, 40, 40)
+label.TextSize = 14
+label.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Toggle Background (The Pill)
+local toggleBg = Instance.new("TextButton", mainFrame)
+toggleBg.Name = "Toggle"
+toggleBg.Text = ""
+toggleBg.Size = UDim2.new(0, 45, 0, 24)
+toggleBg.Position = UDim2.new(1, -60, 0.5, -12)
+toggleBg.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+toggleBg.AutoButtonColor = false
+
+local toggleCorner = Instance.new("UICorner", toggleBg)
+toggleCorner.CornerRadius = UDim.new(1, 0)
+
+-- Toggle Knob (The White Circle)
+local knob = Instance.new("Frame", toggleBg)
+knob.Size = UDim2.new(0, 20, 0, 20)
+knob.Position = UDim2.new(0, 2, 0.5, -10)
+knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+
+local knobCorner = Instance.new("UICorner", knob)
+knobCorner.CornerRadius = UDim.new(1, 0)
+
+-- [[ DRAGGABLE LOGIC ]]
+local dragging, dragInput, dragStart, startPos
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+userInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+userInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- [[ YOUR ORIGINAL SCRIPT LOGIC ]]
+local scriptRunning = false
+local lastCF, stop, heartbeatConnection
+
+local function start()
+    if heartbeatConnection then heartbeatConnection:Disconnect() end
+    heartbeatConnection = runService.Heartbeat:Connect(function()
+        if not scriptRunning or stop then return end 
+        local char = lplr.Character
+        if char and char:FindFirstChildOfClass('Humanoid') and char:FindFirstChildOfClass('Humanoid').RootPart then
+            lastCF = char:FindFirstChildOfClass('Humanoid').RootPart.CFrame
+        end
+    end)
+
+    lplr.Character:FindFirstChildOfClass('Humanoid').RootPart:GetPropertyChangedSignal('CFrame'):Connect(function()
+        if not scriptRunning then return end
+        stop = true
+        lplr.Character:FindFirstChildOfClass('Humanoid').RootPart.CFrame = lastCF
+        runService.Heartbeat:Wait()
+        stop = false
+    end)    
+
+    lplr.Character:FindFirstChildOfClass('Humanoid').Died:Connect(function()
+        if heartbeatConnection then heartbeatConnection:Disconnect() end
+    end)
+end
+
+-- Toggle Animation & Activation
+toggleBg.MouseButton1Click:Connect(function()
+    scriptRunning = not scriptRunning
+    
+    local targetPos = scriptRunning and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+    local targetColor = scriptRunning and Color3.fromRGB(48, 209, 88) or Color3.fromRGB(200, 200, 200) -- iOS Green vs Gray
+
+    tweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart), {Position = targetPos}):Play()
+    tweenService:Create(toggleBg, TweenInfo.new(0.2, Enum.EasingStyle.Quart), {BackgroundColor3 = targetColor}):Play()
+
+    if scriptRunning then
+        start()
+    end
+end)
+
+-- Original Character Handling
+lplr.CharacterAdded:Connect(function(character)
+    repeat runService.Heartbeat:Wait() until character:FindFirstChildOfClass('Humanoid')
+    repeat runService.Heartbeat:Wait() until character:FindFirstChildOfClass('Humanoid').RootPart
+    if scriptRunning then start() end
+end)
+
+lplr.CharacterRemoving:Connect(function()
+    if heartbeatConnection then heartbeatConnection:Disconnect() end
+end)
