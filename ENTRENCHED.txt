@@ -1,0 +1,181 @@
+-- LocalScript: DraggableSniperController.lua
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Configuration Variables
+local isEnabled = true
+local isRightClickHolding = false
+
+local DEFAULT_FOV = 70
+local currentZoomFOV = 25  -- Default zoom level
+local MIN_FOV = 5          -- Maximum zoom-in
+local MAX_FOV = 65         -- Maximum zoom-out
+local SCROLL_STEP = 4      -- Katulinon sa pag-scroll
+
+-- 1. High-Priority ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SniperZoomController"
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 999999999
+screenGui.IgnoreGuiInset = true
+
+local success, _ = pcall(function()
+    screenGui.Parent = game:GetService("CoreGui")
+end)
+if not success or not screenGui.Parent then
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+end
+
+-- 2. Draggable Control Panel Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainPanel"
+mainFrame.Size = UDim2.new(0, 190, 0, 95)
+mainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(45, 45, 55)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = mainFrame
+
+-- Title / Drag Handle Bar
+local dragBar = Instance.new("TextLabel")
+dragBar.Name = "DragBar"
+dragBar.Size = UDim2.new(1, 0, 0, 26)
+dragBar.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+dragBar.BorderSizePixel = 0
+dragBar.Text = "  Sniper Zoom [Drag]"
+dragBar.TextColor3 = Color3.fromRGB(220, 220, 220)
+dragBar.Font = Enum.Font.GothamBold
+dragBar.TextSize = 11
+dragBar.TextXAlignment = Enum.TextXAlignment.Left
+dragBar.Active = true
+dragBar.Parent = mainFrame
+
+local barCorner = Instance.new("UICorner")
+barCorner.CornerRadius = UDim.new(0, 8)
+barCorner.Parent = dragBar
+
+-- Toggle Button (ON / OFF)
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(1, -20, 0, 28)
+toggleButton.Position = UDim2.new(0, 10, 0, 34)
+toggleButton.BackgroundColor3 = Color3.fromRGB(35, 140, 75)
+toggleButton.BorderSizePixel = 0
+toggleButton.Text = "STATUS: ACTIVE"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 11
+toggleButton.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+-- Info Label / Current FOV Display
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Name = "InfoLabel"
+infoLabel.Size = UDim2.new(1, -20, 0, 20)
+infoLabel.Position = UDim2.new(0, 10, 0, 68)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Zoom FOV: " .. tostring(currentZoomFOV) .. " (Scroll)"
+infoLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+infoLabel.Font = Enum.Font.GothamMedium
+infoLabel.TextSize = 10
+infoLabel.Parent = mainFrame
+
+-- 3. Draggable Logic
+local isDragging = false
+local dragStart = nil
+local startPos = nil
+
+dragBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                isDragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- 4. Toggle Button Click Logic
+toggleButton.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    if isEnabled then
+        toggleButton.Text = "STATUS: ACTIVE"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(35, 140, 75)
+    else
+        toggleButton.Text = "STATUS: DISABLED"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(140, 35, 35)
+        isRightClickHolding = false
+        camera.FieldOfView = DEFAULT_FOV
+    end
+end)
+
+-- 5. Right Click + Scroll Wheel Controls
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not isEnabled then return end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isRightClickHolding = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isRightClickHolding = false
+        camera.FieldOfView = DEFAULT_FOV
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not isEnabled then return end
+
+    -- Scroll Wheel Detection samtang nag-Right Click
+    if input.UserInputType == Enum.UserInputType.MouseWheel and isRightClickHolding then
+        if input.Position.Z > 0 then
+            -- Scroll Up -> Zoom In
+            currentZoomFOV = math.clamp(currentZoomFOV - SCROLL_STEP, MIN_FOV, MAX_FOV)
+        else
+            -- Scroll Down -> Zoom Out
+            currentZoomFOV = math.clamp(currentZoomFOV + SCROLL_STEP, MIN_FOV, MAX_FOV)
+        end
+        infoLabel.Text = "Zoom FOV: " .. tostring(math.floor(currentZoomFOV)) .. " (Scroll)"
+    end
+end)
+
+-- 6. RenderStep Anti-Override Enforcement
+RunService:BindToRenderStep("SniperFOVEnforcer", Enum.RenderPriority.Camera.Value + 1, function()
+    if isEnabled and isRightClickHolding then
+        camera.FieldOfView = currentZoomFOV
+    end
+end)

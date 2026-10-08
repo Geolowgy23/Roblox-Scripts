@@ -1,0 +1,284 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+local playerGui = player:WaitForChild("PlayerGui")
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	rootPart = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- Settings para sa Dash
+local DASH_KEY = Enum.KeyCode.Q
+local dashSpeed = 160 -- Mas gipaspasan pa para "pas pas" jud ang dasmag
+local dashDuration = 0.35 -- Taas gamay para maseguro nga makapilit
+local dashEnabled = true
+local MAX_MAGNET_DISTANCE = 200 -- Mas layo nga lock-on distance
+
+-- ==========================================
+-- TARGETING / MAGNET DETECTION
+-- ==========================================
+local function getTargetUnderCursor()
+	local targetPart = mouse.Target
+	if targetPart and targetPart.Parent then
+		local targetModel = targetPart.Parent
+		local targetHumanoid = targetModel:FindFirstChildOfClass("Humanoid")
+		local targetRoot = targetModel:FindFirstChild("HumanoidRootPart")
+
+		if not targetHumanoid and targetModel.Parent then
+			targetModel = targetModel.Parent
+			targetHumanoid = targetModel:FindFirstChildOfClass("Humanoid")
+			targetRoot = targetModel:FindFirstChild("HumanoidRootPart")
+		end
+
+		if targetHumanoid and targetRoot and targetModel ~= character and targetHumanoid.Health > 0 then
+			local distance = (targetRoot.Position - rootPart.Position).Magnitude
+			if distance <= MAX_MAGNET_DISTANCE then
+				return targetRoot
+			end
+		end
+	end
+
+	-- Screen center search para bisag wala na point ang mouse but duol sa tunga sa screen
+	local unitRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
+	local closestPlayerRoot = nil
+	local closestDist = MAX_MAGNET_DISTANCE
+
+	for _, otherPlayer in ipairs(Players:GetPlayers()) do
+		if otherPlayer ~= player and otherPlayer.Character then
+			local otherRoot = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+			local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+			if otherRoot and otherHum and otherHum.Health > 0 then
+				local toTarget = otherRoot.Position - unitRay.Origin
+				local projectedDist = toTarget:Dot(unitRay.Direction.Unit)
+				if projectedDist > 0 and projectedDist < closestDist then
+					local closestPointOnRay = unitRay.Origin + (unitRay.Direction.Unit * projectedDist)
+					local distFromRay = (otherRoot.Position - closestPointOnRay).Magnitude
+					if distFromRay <= 15 then -- Daghang leeway para sayon ma-lock on
+						closestDist = projectedDist
+						closestPlayerRoot = otherRoot
+					end
+				end
+			end
+		end
+	end
+
+	return closestPlayerRoot
+end
+
+-- ==========================================
+-- SETUP SA CONTROL GUI
+-- ==========================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoPilitDashGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Name = "DashMenu"
+frame.Size = UDim2.new(0, 210, 0, 220)
+frame.Position = UDim2.new(0, 20, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 32, 40)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = frame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "AUTO-PILIT DASH [Q]"
+titleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 13
+titleLabel.Parent = frame
+
+-- Toggle Button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0.9, 0, 0, 35)
+toggleBtn.Position = UDim2.new(0.05, 0, 0, 35)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+toggleBtn.Text = "Status: ON"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 14
+toggleBtn.Parent = frame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleBtn
+
+toggleBtn.MouseButton1Click:Connect(function()
+	dashEnabled = not dashEnabled
+	if dashEnabled then
+		toggleBtn.Text = "Status: ON"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+	else
+		toggleBtn.Text = "Status: OFF"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+	end
+end)
+
+local function createAdjusterRow(labelPrefix, initialVal, stepVal, minVal, maxVal, posY, onUpdate)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.5, 0, 0, 25)
+	label.Position = UDim2.new(0.05, 0, 0, posY)
+	label.BackgroundTransparency = 1
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextColor3 = Color3.fromRGB(200, 200, 200)
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.Parent = frame
+
+	local btnMinus = Instance.new("TextButton")
+	btnMinus.Size = UDim2.new(0, 35, 0, 25)
+	btnMinus.Position = UDim2.new(0.55, 0, 0, posY)
+	btnMinus.BackgroundColor3 = Color3.fromRGB(50, 55, 68)
+	btnMinus.Text = "-"
+	btnMinus.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btnMinus.Font = Enum.Font.GothamBold
+	btnMinus.TextSize = 14
+	btnMinus.Parent = frame
+
+	local minusCorner = Instance.new("UICorner")
+	minusCorner.CornerRadius = UDim.new(0, 4)
+	minusCorner.Parent = btnMinus
+
+	local btnPlus = Instance.new("TextButton")
+	btnPlus.Size = UDim2.new(0, 35, 0, 25)
+	btnPlus.Position = UDim2.new(0.77, 0, 0, posY)
+	btnPlus.BackgroundColor3 = Color3.fromRGB(50, 55, 68)
+	btnPlus.Text = "+"
+	btnPlus.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btnPlus.Font = Enum.Font.GothamBold
+	btnPlus.TextSize = 14
+	btnPlus.Parent = frame
+
+	local plusCorner = Instance.new("UICorner")
+	plusCorner.CornerRadius = UDim.new(0, 4)
+	plusCorner.Parent = btnPlus
+
+	local currentVal = initialVal
+	local function updateDisplay()
+		label.Text = string.format("%s: %.1f", labelPrefix, currentVal)
+		onUpdate(currentVal)
+	end
+
+	btnMinus.MouseButton1Click:Connect(function()
+		currentVal = math.clamp(currentVal - stepVal, minVal, maxVal)
+		updateDisplay()
+	end)
+
+	btnPlus.MouseButton1Click:Connect(function()
+		currentVal = math.clamp(currentVal + stepVal, minVal, maxVal)
+		updateDisplay()
+	end)
+
+	updateDisplay()
+end
+
+createAdjusterRow("Speed", dashSpeed, 20, 20, 500, 85, function(val)
+	dashSpeed = val
+end)
+
+createAdjusterRow("Time", dashDuration, 0.05, 0.1, 2.0, 125, function(val)
+	dashDuration = val
+end)
+
+local note = Instance.new("TextLabel")
+note.Size = UDim2.new(1, 0, 0, 40)
+note.Position = UDim2.new(0, 0, 0, 165)
+note.BackgroundTransparency = 1
+note.Text = "Inig Q, mo-gukod/pilit jud sa kaaway!\n(Bisan mag-lihok, pas pas maka-liko)"
+note.TextColor3 = Color3.fromRGB(150, 150, 150)
+note.Font = Enum.Font.Gotham
+note.TextSize = 10
+note.Parent = frame
+
+-- ==========================================
+-- HIGH-SPEED HOMING / PILIT DASH MECHANIC
+-- ==========================================
+local function performDash()
+	if not dashEnabled or humanoid.Health <= 0 then return end
+
+	local targetRoot = getTargetUnderCursor()
+
+	-- Limpyo sa karaang physical attributes (kung naa)
+	local oldAttachment = rootPart:FindFirstChild("DashAttachment")
+	if oldAttachment then oldAttachment:Destroy() end
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "DashAttachment"
+	attachment.Parent = rootPart
+
+	if targetRoot then
+		-- ACTIVE HOMING (MO-PILIT) - Mogamit og AlignPosition aron mo-gukod ug moliko real-time
+		local targetAttachment = Instance.new("Attachment")
+		targetAttachment.Name = "DashTarget"
+		targetAttachment.Parent = targetRoot
+
+		local alignPos = Instance.new("AlignPosition")
+		alignPos.Mode = Enum.PositionAlignmentMode.TwoAttachment
+		alignPos.Attachment0 = attachment
+		alignPos.Attachment1 = targetAttachment
+		alignPos.MaxForce = 3000000 -- Sobra ka kusog nga force para dili makalingkawas
+		alignPos.MaxVelocity = dashSpeed
+		alignPos.Responsiveness = 100 -- PINAKA-PASPAS NGA LIKO (Mura'g magnet)
+		alignPos.Parent = attachment
+
+		-- Dynamic Facing (Sigurohon nga naga-atubang ka sa imong gigukod samtang naglupad)
+		local connection
+		connection = RunService.Heartbeat:Connect(function()
+			if targetRoot and targetRoot.Parent and rootPart and rootPart.Parent then
+				rootPart.CFrame = CFrame.lookAt(rootPart.Position, targetRoot.Position)
+			else
+				if connection then connection:Disconnect() end
+			end
+		end)
+
+		-- Limit Duration / Clean up
+		task.delay(dashDuration, function()
+			if connection then connection:Disconnect() end
+			if attachment and attachment.Parent then attachment:Destroy() end
+			if targetAttachment and targetAttachment.Parent then targetAttachment:Destroy() end
+		end)
+
+	else
+		-- NORMAL DASH (Kung walay target, normal linear dash)
+		local moveDir = humanoid.MoveDirection
+		local dashDirection = (moveDir.Magnitude > 0) and moveDir.Unit or rootPart.CFrame.LookVector
+
+		local linearVelocity = Instance.new("LinearVelocity")
+		linearVelocity.MaxForce = 1000000
+		linearVelocity.VectorVelocity = dashDirection * dashSpeed
+		linearVelocity.Attachment0 = attachment
+		linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+		linearVelocity.Parent = attachment
+
+		task.delay(dashDuration, function()
+			if attachment and attachment.Parent then
+				attachment:Destroy()
+			end
+		end)
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == DASH_KEY then
+		performDash()
+	end
+end)

@@ -1,0 +1,38 @@
+-- [[ LEGIT AIR STRAFE (HINDI GAGANA SA KOTSE / SEAT) ]] --
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local legitAirSpeed = 24        -- Bilis sa ere kapag nag-iistrafo
+local turnResponsiveness = 0.12 -- Kinis ng pagliko
+
+RunService.RenderStepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return end
+
+    -- Huwag paganahin kung nakaupo sa sasakyan o kahit anong upuan
+    if hum.Sit or hum.SeatPart ~= nil then
+        return
+    end
+
+    -- Gagana lamang kapag nasa ere at naglalakad/tumatalon gamit ang sariling paa
+    if hum.FloorMaterial == Enum.Material.Air then
+        local moveDir = hum.MoveDirection
+
+        if moveDir.Magnitude > 0 then
+            local currentVel = hrp.AssemblyLinearVelocity
+            local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
+
+            -- Maayos na paglipat ng direksyon nang hindi biglaan
+            local targetVel = moveDir.Unit * legitAirSpeed
+            local smoothVel = horizontalVel:Lerp(targetVel, turnResponsiveness)
+
+            -- Panatilihin ang natural na bigat at pagbaba ng karakter
+            hrp.AssemblyLinearVelocity = Vector3.new(smoothVel.X, currentVel.Y, smoothVel.Z)
+        end
+    end
+end)

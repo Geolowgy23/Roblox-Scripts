@@ -1,0 +1,42 @@
+-- LocalScript sa StarterPlayerScripts
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+end)
+
+-- Track kung gipislit o gihuptan ba ang Spacebar / Jump
+local isJumpingInput = false
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.Space then
+		isJumpingInput = true
+		-- Kung naa sa salog, ambak dayon
+		if humanoid.FloorMaterial ~= Enum.Material.Air then
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == Enum.KeyCode.Space then
+		isJumpingInput = false
+	end
+end)
+
+-- Bungkagon ang landing delay: Pagdapat gyud sa yuta, ambak dayon
+humanoid.StateChanged:Connect(function(oldState, newState)
+	if newState == Enum.HumanoidStateType.Landed then
+		if isJumpingInput then
+			-- Tangtangon ang landing pause pinaagi sa pag-force balik sa Jumping state
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+end)

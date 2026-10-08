@@ -1,0 +1,105 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- ================= SETTINGS =================
+local DEFAULT_FOV = 70
+local MIN_FOV = 1
+local MAX_FOV = 60
+local ZOOM_STEP = 3
+local SMOOTHNESS = 0.25
+
+-- ================= STATES =================
+local isFeatureEnabled = true
+local isHoldingShift = false
+local isHoldingRightClick = false
+local targetFOV = DEFAULT_FOV
+local currentZoomTarget = 20
+
+local function isZooming()
+	return isFeatureEnabled and isHoldingShift and isHoldingRightClick
+end
+
+-- ================= GUI SETUP =================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ZoomFeatureGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ToggleZoomBtn"
+toggleBtn.Size = UDim2.new(0, 130, 0, 40)
+toggleBtn.Position = UDim2.new(0, 20, 0.5, -20)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Green
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 16
+toggleBtn.Text = "Zoom: ON"
+toggleBtn.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = toggleBtn
+
+-- Toggle Click Logic
+toggleBtn.MouseButton1Click:Connect(function()
+	isFeatureEnabled = not isFeatureEnabled
+	
+	if isFeatureEnabled then
+		toggleBtn.Text = "Zoom: ON"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Green
+	else
+		toggleBtn.Text = "Zoom: OFF"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Red
+		targetFOV = DEFAULT_FOV
+	end
+end)
+
+-- ================= CONTROLS =================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
+		isHoldingShift = true
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isHoldingRightClick = true
+	end
+
+	if isZooming() then
+		targetFOV = currentZoomTarget
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
+		isHoldingShift = false
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isHoldingRightClick = false
+	end
+
+	if not isZooming() then
+		targetFOV = DEFAULT_FOV
+	end
+end)
+
+-- Mouse Scroll para sa Zoom
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if isZooming() and input.UserInputType == Enum.UserInputType.MouseWheel then
+		if input.Position.Z > 0 then
+			currentZoomTarget = math.clamp(currentZoomTarget - ZOOM_STEP, MIN_FOV, MAX_FOV)
+		elseif input.Position.Z < 0 then
+			currentZoomTarget = math.clamp(currentZoomTarget + ZOOM_STEP, MIN_FOV, MAX_FOV)
+		end
+		targetFOV = currentZoomTarget
+	end
+end)
+
+-- Camera Render Loop
+RunService.RenderStepped:Connect(function()
+	camera.FieldOfView = camera.FieldOfView + (targetFOV - camera.FieldOfView) * SMOOTHNESS
+end)

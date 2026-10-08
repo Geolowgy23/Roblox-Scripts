@@ -1,0 +1,385 @@
+-- LocalScript (StarterPlayerScripts o StarterGui)
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 1. ScreenGui Setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ModernArmoryHub"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local savedPosition = nil
+local isHovering = false
+local shakeConnection = nil
+
+-- Function para sa Teleport
+local function teleportTo(targetCFrame)
+	local character = player.Character
+	if character and character:FindFirstChild("HumanoidRootPart") then
+		character.HumanoidRootPart.CFrame = targetCFrame
+	end
+end
+
+-- Function para pakurogon ang character
+local function startShake(basePosition)
+	if shakeConnection then
+		shakeConnection:Disconnect()
+	end
+
+	shakeConnection = RunService.RenderStepped:Connect(function()
+		local character = player.Character
+		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+		if hrp and isHovering then
+			local shakeOffset = Vector3.new(
+				(math.random() - 0.5) * 0.6,
+				(math.random() - 0.5) * 0.4,
+				(math.random() - 0.5) * 0.6
+			)
+			hrp.CFrame = CFrame.new(basePosition + shakeOffset)
+		end
+	end)
+end
+
+local function stopShake()
+	if shakeConnection then
+		shakeConnection:Disconnect()
+		shakeConnection = nil
+	end
+end
+
+-- Function para sa Interaction (ProximityPrompt, ClickDetector, Touch)
+local function interactWithItem(searchKey, targetPos)
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj.Name:lower():find(searchKey:lower()) or (obj.Parent and obj.Parent.Name:lower():find(searchKey:lower())) then
+			local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
+			
+			if part and (part.Position - targetPos).Magnitude <= 20 then
+				local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if prompt then
+					if fireproximityprompt then
+						fireproximityprompt(prompt)
+					else
+						prompt:InputHoldBegin()
+						task.wait(prompt.HoldDuration)
+						prompt:InputHoldEnd()
+					end
+				end
+
+				local detector = obj:FindFirstChildWhichIsA("ClickDetector", true)
+				if detector and fireclickdetector then
+					fireclickdetector(detector)
+				end
+
+				if hrp and firetouchinterest then
+					firetouchinterest(hrp, part, 0)
+					task.wait()
+					firetouchinterest(hrp, part, 1)
+				end
+			end
+		end
+	end
+end
+
+-- 2. Main Frame & Design
+local fullHeight = 175
+local minimizedHeight = 36
+local isMinimized = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainHub"
+mainFrame.Size = UDim2.new(0, 260, 0, fullHeight)
+mainFrame.Position = UDim2.new(0.08, 0, 0.35, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+local borderStroke = Instance.new("UIStroke")
+borderStroke.Color = Color3.fromRGB(0, 220, 255)
+borderStroke.Thickness = 1.5
+borderStroke.Transparency = 0.3
+borderStroke.Parent = mainFrame
+
+-- Title Bar (Drag Handle)
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundColor3 = Color3.fromRGB(11, 13, 17)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -75, 1, 0)
+titleText.Position = UDim2.new(0, 12, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Font = Enum.Font.GothamBold
+titleText.Text = "⚡ ARMORY TP"
+titleText.TextColor3 = Color3.fromRGB(0, 230, 255)
+titleText.TextSize = 13
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- Container para sa Buttons
+local contentContainer = Instance.new("Frame")
+contentContainer.Name = "Content"
+contentContainer.Size = UDim2.new(1, 0, 1, -36)
+contentContainer.Position = UDim2.new(0, 0, 0, 36)
+contentContainer.BackgroundTransparency = 1
+contentContainer.Parent = mainFrame
+
+-- Window Controls (Minimize & Close)
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 24, 0, 24)
+minBtn.Position = UDim2.new(1, -54, 0.5, -12)
+minBtn.BackgroundColor3 = Color3.fromRGB(25, 30, 40)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.Text = "—"
+minBtn.TextColor3 = Color3.fromRGB(180, 190, 205)
+minBtn.TextSize = 11
+minBtn.Parent = titleBar
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minBtn
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 24, 0, 24)
+closeBtn.Position = UDim2.new(1, -28, 0.5, -12)
+closeBtn.BackgroundColor3 = Color3.fromRGB(40, 25, 30)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 90, 90)
+closeBtn.TextSize = 11
+closeBtn.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+minBtn.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+	local targetHeight = isMinimized and minimizedHeight or fullHeight
+	TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+		Size = UDim2.new(0, 260, 0, targetHeight)
+	}):Play()
+	contentContainer.Visible = not isMinimized
+	minBtn.Text = isMinimized and "＋" or "—"
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
+end)
+
+-- 3. Draggable Implementation
+local dragging, dragInput, dragStart, startPos
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		local targetPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		TweenService:Create(mainFrame, TweenInfo.new(0.08, Enum.EasingStyle.Sine), {Position = targetPos}):Play()
+	end
+end)
+
+-- 4. Target Coordinates & Hotkey Binding Setup
+local guns = {
+	{
+		name = "M700 (Sniper)", 
+		searchKey = "M700", 
+		coords = Vector3.new(836, 101, 2229),
+		hotkey = nil
+	},
+	{
+		name = "Remington 870", 
+		searchKey = "Remington", 
+		coords = Vector3.new(821, 101, 2229),
+		hotkey = nil
+	}
+}
+
+local function triggerAction(gunData)
+	local character = player.Character
+	if character and character:FindFirstChild("HumanoidRootPart") and not isHovering then
+		savedPosition = character.HumanoidRootPart.CFrame
+		isHovering = true
+
+		startShake(gunData.coords)
+
+		task.spawn(function()
+			task.wait(0.04)
+			interactWithItem(gunData.searchKey, gunData.coords)
+		end)
+	end
+end
+
+local function releaseAction()
+	if isHovering then
+		isHovering = false
+		stopShake()
+
+		if savedPosition then
+			teleportTo(savedPosition)
+			savedPosition = nil
+		end
+	end
+end
+
+-- Custom Gun Entry Row (With Hover & Custom Keybind Selector)
+local function createGunRow(gunData, yOffset)
+	local rowFrame = Instance.new("Frame")
+	rowFrame.Size = UDim2.new(0.92, 0, 0, 44)
+	rowFrame.Position = UDim2.new(0.04, 0, 0, yOffset)
+	rowFrame.BackgroundTransparency = 1
+	rowFrame.Parent = contentContainer
+
+	local mainBtn = Instance.new("TextButton")
+	mainBtn.Size = UDim2.new(0.68, 0, 1, 0)
+	mainBtn.BackgroundColor3 = Color3.fromRGB(24, 28, 36)
+	mainBtn.Font = Enum.Font.GothamMedium
+	mainBtn.Text = "  " .. gunData.name
+	mainBtn.TextColor3 = Color3.fromRGB(215, 225, 235)
+	mainBtn.TextSize = 11
+	mainBtn.TextXAlignment = Enum.TextXAlignment.Left
+	mainBtn.AutoButtonColor = false
+	mainBtn.Parent = rowFrame
+
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 7)
+	btnCorner.Parent = mainBtn
+
+	local btnStroke = Instance.new("UIStroke")
+	btnStroke.Color = Color3.fromRGB(40, 48, 62)
+	btnStroke.Thickness = 1
+	btnStroke.Parent = mainBtn
+
+	-- Hotkey Assignment Button
+	local hotkeyBtn = Instance.new("TextButton")
+	hotkeyBtn.Size = UDim2.new(0.28, 0, 1, 0)
+	hotkeyBtn.Position = UDim2.new(0.72, 0, 0, 0)
+	hotkeyBtn.BackgroundColor3 = Color3.fromRGB(20, 24, 30)
+	hotkeyBtn.Font = Enum.Font.GothamBold
+	hotkeyBtn.Text = "[NONE]"
+	hotkeyBtn.TextColor3 = Color3.fromRGB(0, 200, 220)
+	hotkeyBtn.TextSize = 10
+	hotkeyBtn.AutoButtonColor = false
+	hotkeyBtn.Parent = rowFrame
+
+	local hkCorner = Instance.new("UICorner")
+	hkCorner.CornerRadius = UDim.new(0, 7)
+	hkCorner.Parent = hotkeyBtn
+
+	local hkStroke = Instance.new("UIStroke")
+	hkStroke.Color = Color3.fromRGB(40, 48, 62)
+	hkStroke.Thickness = 1
+	hkStroke.Parent = hotkeyBtn
+
+	-- Setup Dynamic Hotkey Binding
+	local listeningForInput = false
+	hotkeyBtn.MouseButton1Click:Connect(function()
+		listeningForInput = true
+		hotkeyBtn.Text = "[...]"
+		hotkeyBtn.TextColor3 = Color3.fromRGB(255, 200, 50)
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if listeningForInput and input.UserInputType == Enum.UserInputType.Keyboard then
+			gunData.hotkey = input.KeyCode
+			hotkeyBtn.Text = "[" .. input.KeyCode.Name .. "]"
+			hotkeyBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
+			listeningForInput = false
+		elseif not gameProcessed and gunData.hotkey and input.KeyCode == gunData.hotkey then
+			triggerAction(gunData)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if gunData.hotkey and input.KeyCode == gunData.hotkey then
+			releaseAction()
+		end
+	end)
+
+	-- Hover Events sa Gun Button
+	mainBtn.MouseEnter:Connect(function()
+		TweenService:Create(mainBtn, TweenInfo.new(0.18), {
+			BackgroundColor3 = Color3.fromRGB(0, 110, 180),
+			TextColor3 = Color3.fromRGB(255, 255, 255)
+		}):Play()
+		btnStroke.Color = Color3.fromRGB(0, 220, 255)
+
+		triggerAction(gunData)
+	end)
+
+	mainBtn.MouseLeave:Connect(function()
+		releaseAction()
+
+		TweenService:Create(mainBtn, TweenInfo.new(0.18), {
+			BackgroundColor3 = Color3.fromRGB(24, 28, 36),
+			TextColor3 = Color3.fromRGB(215, 225, 235)
+		}):Play()
+		btnStroke.Color = Color3.fromRGB(40, 48, 62)
+	end)
+end
+
+-- I-render ang mga entries
+for i, gun in ipairs(guns) do
+	createGunRow(gun, 12 + (i - 1) * 54)
+end
+
+-- 5. Minimalist Toggle Menu Button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "HubToggle"
+toggleBtn.Size = UDim2.new(0, 75, 0, 28)
+toggleBtn.Position = UDim2.new(0.08, 0, 0.35, -34)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(14, 16, 20)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Text = "MENU"
+toggleBtn.TextColor3 = Color3.fromRGB(0, 230, 255)
+toggleBtn.TextSize = 11
+toggleBtn.Parent = screenGui
+
+local tCorner = Instance.new("UICorner")
+tCorner.CornerRadius = UDim.new(0, 7)
+tCorner.Parent = toggleBtn
+
+local tStroke = Instance.new("UIStroke")
+tStroke.Color = Color3.fromRGB(0, 220, 255)
+tStroke.Thickness = 1
+tStroke.Parent = toggleBtn
+
+toggleBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = not mainFrame.Visible
+end)
