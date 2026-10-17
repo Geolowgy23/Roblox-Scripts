@@ -1,4 +1,5 @@
 # 🎮 Roblox Scripts Collection
+*Created and maintained by Geolowgy*
 
 A modular collection of Lua and Luau scripts, utilities, and gameplay modifications for Roblox.
 
@@ -27,3 +28,9 @@ A modular collection of Lua and Luau scripts, utilities, and gameplay modificati
 
 - **Compatibility:** Script behavior may change depending on Roblox game updates or patch cycles.
 - **Educational Use:** This repository is intended strictly for research, scripting practice, and reverse-engineering experiments in Lua. The author assumes no responsibility for misuse.
+
+---
+
+## 👤 Credits
+
+Developed and curated by **Geolowgy**.
